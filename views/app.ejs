@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<%
+const TITLES={dashboard:'Dashboard',create_tender:'Create Tender',manage_tenders:'Tenders',tender_detail:'Tender Detail',manage_vendors:'Vendors',pending_vendors:'Pending Vendors',record_bid:'Record Bid',create_evaluation:'Create Evaluation Session',evaluate:'Evaluate Bids',evaluation_results:'Evaluation Results',approvals:'Approvals',approval_detail:'Approval Review',pending_fees:'Pending Fees',fee_history:'Fee History',notifications:'Notifications',audit_logs:'Audit Logs',manage_users:'Users',settings:'Settings',broadcast_notification:'Broadcast',reports:'Reports',my_profile:'My Profile',view_bid_docs:'Bid Documents'};
+function badge(s){const m={draft:'secondary',published:'primary',accepting_bids:'info',bids_closed:'warning',under_evaluation:'warning',committee_decision:'warning',pending_dvc:'purple',dvc_approved:'success',awarded:'success',completed:'success',archived:'dark',cancelled:'danger',pending:'warning',approved:'success',blacklisted:'danger',rejected:'danger',requested_info:'info',confirmed:'success',refunded:'secondary',interested:'secondary',fee_paid:'info',bid_submitted:'primary',result_notified:'dark',in_progress:'info'};return '<span class="badge bg-'+(m[s]||'secondary')+'">'+String(s||'').replace(/_/g,' ')+'</span>';}
+function fmtD(x){return x?new Date(x).toLocaleDateString():'—';}
+function fmtDT(x){return x?new Date(x).toLocaleString():'—';}
+const NAVS={
+ super_admin:[['dashboard','fa-gauge-high','Dashboard'],['manage_tenders','fa-file-contract','Tenders'],['create_tender','fa-plus','Create Tender'],['manage_vendors','fa-building','Vendors'],['pending_vendors','fa-user-clock','Pending Vendors'],['manage_users','fa-users','Users'],['audit_logs','fa-clipboard-list','Audit Logs'],['reports','fa-chart-pie','Reports'],['broadcast_notification','fa-bullhorn','Broadcast'],['settings','fa-gear','Settings'],['notifications','fa-bell','Notifications']],
+ dvc:[['dashboard','fa-gauge-high','Dashboard'],['approvals','fa-stamp','Approvals'],['notifications','fa-bell','Notifications']],
+ procurement_head:[['dashboard','fa-gauge-high','Dashboard'],['manage_tenders','fa-file-contract','Tenders'],['manage_vendors','fa-building','Vendors'],['pending_vendors','fa-user-clock','Pending Vendors'],['audit_logs','fa-clipboard-list','Audit Logs'],['reports','fa-chart-pie','Reports'],['notifications','fa-bell','Notifications']],
+ tender_handler:[['dashboard','fa-gauge-high','Dashboard'],['create_tender','fa-plus','Create Tender'],['manage_tenders','fa-file-contract','Tenders'],['broadcast_notification','fa-bullhorn','Broadcast'],['notifications','fa-bell','Notifications']],
+ committee_member:[['dashboard','fa-gauge-high','Dashboard'],['notifications','fa-bell','Notifications']],
+ finance_officer:[['dashboard','fa-gauge-high','Dashboard'],['pending_fees','fa-money-bill-wave','Pending Fees'],['fee_history','fa-clock-rotate-left','Fee History'],['notifications','fa-bell','Notifications']],
+ vendor:[['dashboard','fa-gauge-high','Dashboard'],['manage_tenders','fa-file-contract','Tenders'],['my_profile','fa-id-card','My Profile'],['notifications','fa-bell','Notifications']],
+ webmaster:[['dashboard','fa-gauge-high','Dashboard'],['manage_tenders','fa-file-contract','Tenders'],['notifications','fa-bell','Notifications']]
+};
+const nav=NAVS[role]||NAVS.webmaster;
+%>
+<title><%= TITLES[page]||'DU-TMS' %> — DU-TMS</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{--sidebar:#0F172A;--bg:#F1F5F9;--primary:#1E40AF;--text:#1E293B}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text)}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:270px;background:var(--sidebar);color:#CBD5E1;display:flex;flex-direction:column;z-index:1000}
+.sidebar .brand{padding:1.4rem 1.5rem;font-weight:800;font-size:1.25rem;color:#fff;border-bottom:1px solid rgba(255,255,255,.08)}
+.sidebar a.nav-link{color:#94A3B8;padding:.7rem 1.5rem;border-radius:0;font-size:.92rem}
+.sidebar a.nav-link:hover{color:#fff;background:rgba(255,255,255,.05)}
+.sidebar a.nav-link.active{color:#fff;background:var(--primary)}
+.sidebar .nav-link i{width:22px;text-align:center;margin-right:.6rem}
+.main{margin-left:270px;min-height:100vh}
+.topbar{background:#fff;padding:.9rem 1.8rem;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;align-items:center;justify-content:space-between}
+.card{border:none;border-radius:16px;box-shadow:0 2px 12px rgba(15,23,42,.06)}
+.metric-card{border-radius:16px;padding:1.2rem 1.4rem}
+.bg-purple{background:#7C3AED!important;color:#fff}
+.text-purple{color:#7C3AED!important}
+.avatar{width:38px;height:38px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+.chart-wrap{position:relative;height:300px}
+.table th{font-size:.8rem;text-transform:uppercase;color:#64748B}
+.badge{font-weight:600}
+canvas.sig{border:2px dashed #CBD5E1;border-radius:10px;background:#fff;touch-action:none}
+</style>
+</head>
+<body>
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="brand"><i class="fa-solid fa-building-columns me-2"></i>DU-TMS</div>
+  <nav class="nav flex-column mt-2" style="flex:1;overflow-y:auto">
+    <% nav.forEach(n=>{ %>
+      <a class="nav-link <%= page===n[0]?'active':'' %>" href="/app?page=<%= n[0] %>"><i class="fa-solid <%= n[1] %>"></i><%= n[2] %>
+        <% if(n[0]==='notifications' && unreadCount>0){ %><span class="badge bg-danger rounded-pill ms-2"><%= unreadCount %></span><% } %>
+      </a>
+    <% }) %>
+  </nav>
+  <a class="nav-link text-danger mb-3" href="/logout"><i class="fa-solid fa-right-from-bracket"></i>Logout</a>
+</div>
+
+<div class="main">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <h5 class="mb-0 fw-bold"><%= TITLES[page]||'Dashboard' %></h5>
+    <div class="d-flex align-items-center gap-3">
+      <a href="/app?page=notifications" class="text-secondary position-relative"><i class="fa-solid fa-bell fs-5"></i>
+        <% if(unreadCount>0){ %><span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:.6rem"><%= unreadCount %></span><% } %>
+      </a>
+      <span class="text-muted small">Welcome, <strong><%= user.name %></strong></span>
+      <span class="badge bg-purple"><%= role.replace(/_/g,' ') %></span>
+      <div class="avatar"><%= user.name.charAt(0).toUpperCase() %></div>
+    </div>
+  </div>
+
+  <div class="p-4">
+    <nav style="font-size:.85rem" class="mb-2 text-muted">Home / <%= TITLES[page]||page %></nav>
+    <% if(msg){ %><div class="alert alert-success alert-dismissible py-2"><%= msg %><button class="btn-close" data-bs-dismiss="alert"></button></div><% } %>
+
+    <!-- ==================== DASHBOARD ==================== -->
+    <% if(page==='dashboard'){ %>
+      <div class="row g-3 mb-4">
+        <% (locals.cards||[]).forEach(c=>{ %>
+          <div class="col-md-3"><div class="card metric-card">
+            <div class="d-flex justify-content-between align-items-center">
+              <div><div class="text-muted small"><%= c.label %></div><h3 class="fw-bold mb-0"><%= c.value %></h3></div>
+              <div class="fs-3 text-<%= c.color==='purple'?'purple':c.color %>"><i class="fa-solid <%= c.icon %>"></i></div>
+            </div></div></div>
+        <% }) %>
+      </div>
+      <% if(locals.pendingApprovals && pendingApprovals.length){ %>
+        <div class="card mb-4"><div class="card-body"><h6 class="fw-bold mb-3">Pending DVC Approvals</h6>
+        <table class="table table-hover"><thead><tr><th>Tender</th><th>Title</th><th>Received</th><th></th></tr></thead><tbody>
+        <% pendingApprovals.forEach(a=>{ %><tr><td><%= a.tender_id?a.tender_id.tender_number:'—' %></td><td><%= a.tender_id?a.tender_id.title:'—' %></td><td><%= fmtD(a.createdAt) %></td>
+        <td><a href="/app?page=approval_detail&id=<%= a._id %>" class="btn btn-sm btn-primary">Review</a></td></tr><% }) %>
+        </tbody></table></div></div><% } %>
+      <% if(locals.mySessions && mySessions.length){ %>
+        <div class="card mb-4"><div class="card-body"><h6 class="fw-bold mb-3">My Evaluation Sessions</h6>
+        <table class="table table-hover"><thead><tr><th>Tender</th><th>Date</th><th>Venue</th><th>Status</th><th></th></tr></thead><tbody>
+        <% mySessions.forEach(s=>{ %><tr><td><%= s.tender_id?s.tender_id.title:'—' %></td><td><%= fmtD(s.date) %> <%= s.time||'' %></td><td><%= s.venue||'—' %></td><td><%- badge(s.status) %></td>
+        <td><a href="/app?page=evaluate&id=<%= s._id %>" class="btn btn-sm btn-primary">Open</a></td></tr><% }) %>
+        </tbody></table></div></div><% } %>
+      <% if(locals.pendingFees && pendingFees.length){ %>
+        <div class="card mb-4"><div class="card-body"><h6 class="fw-bold mb-3">Awaiting Fee Confirmation</h6>
+        <table class="table"><thead><tr><th>Vendor</th><th>Tender</th><th>Fee</th><th>Ref</th></tr></thead><tbody>
+        <% pendingFees.forEach(p=>{ %><tr><td><%= p.vendor_id?p.vendor_id.company_name_en:'—' %></td><td><%= p.tender_id?p.tender_id.title:'—' %></td><td>OMR <%= p.tender_id?p.tender_id.fee_amount:'—' %></td><td><%= p.payment_ref %></td></tr><% }) %>
+        </tbody></table><a href="/app?page=pending_fees" class="btn btn-sm btn-outline-primary">Go to Pending Fees</a></div></div><% } %>
+      <% if(locals.myParticipations && myParticipations.length){ %>
+        <div class="card mb-4"><div class="card-body"><h6 class="fw-bold mb-3">My Participations</h6>
+        <table class="table"><thead><tr><th>Tender</th><th>Status</th><th>Payment Ref</th></tr></thead><tbody>
+        <% myParticipations.forEach(p=>{ %><tr><td><%= p.tender_id?p.tender_id.title:'—' %></td><td><%- badge(p.status) %></td><td><%= p.payment_ref %></td></tr><% }) %>
+        </tbody></table></div></div><% } %>
+      <% if(locals.recentTenders && recentTenders.length){ %>
+        <div class="card mb-4"><div class="card-body"><h6 class="fw-bold mb-3">Recent Tenders</h6>
+        <table class="table table-hover"><thead><tr><th>Tender #</th><th>Title</th><th>Category</th><th>Deadline</th><th>Status</th><th></th></tr></thead><tbody>
+        <% recentTenders.forEach(t=>{ %><tr><td><%= t.tender_number %></td><td><%= t.title %></td><td><%= t.category %></td><td><%= fmtD(t.submission_deadline) %></td><td><%- badge(t.status) %></td>
+        <td><% if(role!=='vendor'&&role!=='webmaster'){ %><a href="/app?page=tender_detail&id=<%= t._id %>" class="btn btn-sm btn-outline-primary">View</a><% } %></td></tr><% }) %>
+        </tbody></table></div></div><% } %>
+      <% if(locals.recentAudit && recentAudit.length){ %>
+        <div class="card"><div class="card-body"><h6 class="fw-bold mb-3">Recent Activity</h6>
+        <table class="table table-sm"><tbody>
+        <% recentAudit.forEach(l=>{ %><tr><td class="text-muted small"><%= fmtDT(l.createdAt) %></td><td><%= l.user_id?l.user_id.name:'system' %></td><td><span class="badge bg-light text-dark"><%= l.action %></span></td><td><%= l.entity_type %></td></tr><% }) %>
+        </tbody></table></div></div><% } %>
+
+    <!-- ==================== CREATE TENDER ==================== -->
+    <% } else if(page==='create_tender'){ %>
+      <div class="card" style="max-width:820px"><div class="card-body p-4">
+      <form method="POST" action="/app"><input type="hidden" name="action" value="create_tender">
+      <div class="row g-3">
+        <div class="col-md-8"><label class="form-label">Title *</label><input name="title" class="form-control" required></div>
+        <div class="col-md-4"><label class="form-label">Category *</label><select name="category" class="form-select" required>
+          <% (locals.categories||[]).forEach(c=>{ %><option><%= c.name %></option><% }) %></select></div>
+        <div class="col-12"><label class="form-label">Description</label><textarea name="description" class="form-control" rows="3"></textarea></div>
+        <div class="col-md-3"><label class="form-label">Est. Value Min (OMR)</label><input type="number" name="estimated_value_min" class="form-control"></div>
+        <div class="col-md-3"><label class="form-label">Est. Value Max (OMR)</label><input type="number" name="estimated_value_max" class="form-control"></div>
+        <div class="col-md-3"><label class="form-label">Submission Deadline *</label><input type="datetime-local" name="submission_deadline" class="form-control" required></div>
+        <div class="col-md-3"><label class="form-label">Opening Date</label><input type="datetime-local" name="opening_date" class="form-control"></div>
+        <div class="col-md-6"><label class="form-label">Contact Person</label><input name="contact_person" class="form-control"></div>
+        <div class="col-md-6"><label class="form-label">Contact Details</label><input name="contact_details" class="form-control"></div>
+      </div>
+      <div class="alert alert-info mt-3 py-2 small">Fee auto-calculated: &lt;20,000 → OMR 30 | ≤100,000 → OMR 50 | &gt;100,000 → OMR 100</div>
+      <button class="btn btn-primary mt-2"><i class="fa-solid fa-plus me-1"></i>Create Draft Tender</button>
+      </form></div></div>
+
+    <!-- ==================== MANAGE TENDERS ==================== -->
+    <% } else if(page==='manage_tenders'){ %>
+      <div class="card"><div class="card-body">
+      <form class="row g-2 mb-3"><input type="hidden" name="page" value="manage_tenders">
+        <div class="col-md-4"><input name="q" value="<%= locals.q||'' %>" class="form-control" placeholder="Search title / tender #"></div>
+        <div class="col-md-3"><select name="status" class="form-select"><option value="">All statuses</option>
+        <% ['draft','published','accepting_bids','bids_closed','under_evaluation','pending_dvc','awarded','cancelled'].forEach(s=>{ %>
+          <option value="<%= s %>" <%= locals.statusFilter===s?'selected':'' %>><%= s.replace(/_/g,' ') %></option><% }) %></select></div>
+        <div class="col-md-2"><button class="btn btn-primary w-100">Filter</button></div>
+      </form>
+      <table class="table table-hover"><thead><tr><th>Tender #</th><th>Title</th><th>Category</th><th>Fee</th><th>Deadline</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+      <% (locals.tenders||[]).forEach(t=>{ const myP=(locals.myParticipations||[]).find(p=>String(p.tender_id)===String(t._id)); %>
+        <tr><td><%= t.tender_number %></td><td><%= t.title %></td><td><%= t.category %></td><td>OMR <%= t.fee_amount %></td>
+        <td><%= fmtDT(t.submission_deadline) %></td><td><%- badge(t.status) %></td>
+        <td>
+          <% if(role==='vendor'){ %>
+            <% if(myP){ %><%- badge(myP.status) %><% } else if(['published','accepting_bids'].includes(t.status)){ %>
+            <form method="POST" action="/app" class="d-inline"><input type="hidden" name="action" value="express_interest"><input type="hidden" name="tender_id" value="<%= t._id %>">
+            <button class="btn btn-sm btn-primary">Express Interest</button></form><% } %>
+          <% } else if(role!=='webmaster'){ %>
+            <a href="/app?page=tender_detail&id=<%=
