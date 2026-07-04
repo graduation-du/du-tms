@@ -163,4 +163,496 @@ canvas.sig{border:2px dashed #CBD5E1;border-radius:10px;background:#fff;touch-ac
             <form method="POST" action="/app" class="d-inline"><input type="hidden" name="action" value="express_interest"><input type="hidden" name="tender_id" value="<%= t._id %>">
             <button class="btn btn-sm btn-primary">Express Interest</button></form><% } %>
           <% } else if(role!=='webmaster'){ %>
-            <a href="/app?page=tender_detail&id=<%=
+            <a href="/app?page=tender_detail&id=<%= t._id %>" class="btn btn-sm btn-outline-primary">View</a>
+          <% } %>
+        </td></tr>
+      <% }) %>
+      </tbody></table></div></div>
+
+    <!-- ==================== TENDER DETAIL ==================== -->
+    <% } else if(page==='tender_detail'){ const t=tender; %>
+      <div class="card mb-3"><div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div><h5 class="fw-bold mb-1"><%= t.title %></h5>
+          <span class="text-muted"><%= t.tender_number %> · <%= t.category %></span> <%- badge(t.status) %></div>
+          <div class="d-flex gap-2">
+            <% if(t.status==='draft'){ %>
+              <form method="POST" action="/app"><input type="hidden" name="action" value="publish_tender"><input type="hidden" name="tender_id" value="<%= t._id %>">
+              <button class="btn btn-primary btn-sm"><i class="fa-solid fa-bullhorn me-1"></i>Publish</button></form>
+            <% } %>
+            <% if(t.status==='accepting_bids'){ %>
+              <a href="/app?page=record_bid&id=<%= t._id %>" class="btn btn-warning btn-sm"><i class="fa-solid fa-envelope me-1"></i>Record Bid</a>
+            <% } %>
+            <% if(t.status==='bids_closed'){ %>
+              <a href="/app?page=create_evaluation&id=<%= t._id %>" class="btn btn-info btn-sm text-white"><i class="fa-solid fa-scale-balanced me-1"></i>Create Evaluation</a>
+            <% } %>
+            <a href="/app?page=view_bid_docs&id=<%= t._id %>" class="btn btn-outline-secondary btn-sm">Bid Docs</a>
+            <% if(!['awarded','completed','archived','cancelled'].includes(t.status)){ %>
+              <button class="btn btn-outline-danger btn-sm" data-bs-toggle="collapse" data-bs-target="#cancelForm">Cancel</button>
+            <% } %>
+          </div>
+        </div>
+        <div class="collapse mt-3" id="cancelForm">
+          <form method="POST" action="/app" class="row g-2"><input type="hidden" name="action" value="cancel_tender"><input type="hidden" name="tender_id" value="<%= t._id %>">
+          <div class="col-md-6"><input name="reason" class="form-control form-control-sm" placeholder="Cancellation reason" required></div>
+          <div class="col-auto"><button class="btn btn-danger btn-sm">Confirm Cancel</button></div></form>
+        </div>
+        <hr>
+        <div class="row small">
+          <div class="col-md-3"><strong>Est. Value:</strong> OMR <%= t.estimated_value_min %> – <%= t.estimated_value_max %></div>
+          <div class="col-md-2"><strong>Fee:</strong> OMR <%= t.fee_amount %> (<%= t.fee_tier %>)</div>
+          <div class="col-md-3"><strong>Deadline:</strong> <%= fmtDT(t.submission_deadline) %></div>
+          <div class="col-md-2"><strong>Opening:</strong> <%= fmtDT(t.opening_date) %></div>
+          <div class="col-md-2"><strong>By:</strong> <%= t.created_by?t.created_by.name:'—' %></div>
+        </div>
+        <% if(t.status==='awarded'&&t.awarded_vendor_id){ %><div class="alert alert-success mt-3 py-2"><i class="fa-solid fa-trophy me-1"></i>Awarded to <strong><%= t.awarded_vendor_id.company_name_en %></strong></div><% } %>
+        <% if(t.status==='cancelled'){ %><div class="alert alert-danger mt-3 py-2">Cancelled: <%= t.cancelled_reason %></div><% } %>
+        <% if(t.status==='accepting_bids'){ %>
+          <form method="POST" action="/app" class="row g-2 mt-2"><input type="hidden" name="action" value="extend_deadline"><input type="hidden" name="tender_id" value="<%= t._id %>">
+          <div class="col-auto"><input type="datetime-local" name="new_deadline" class="form-control form-control-sm" required></div>
+          <div class="col-auto"><button class="btn btn-outline-primary btn-sm">Extend Deadline</button></div></form>
+        <% } %>
+      </div></div>
+
+      <ul class="nav nav-tabs mb-3">
+        <% ['documents','participations','bids','evaluation','approval','timeline'].forEach((tb,i)=>{ %>
+          <li class="nav-item"><a class="nav-link <%= i===0?'active':'' %>" data-bs-toggle="tab" href="#tab-<%= tb %>"><%= tb.charAt(0).toUpperCase()+tb.slice(1) %></a></li>
+        <% }) %>
+      </ul>
+      <div class="tab-content">
+        <div class="tab-pane fade show active" id="tab-documents"><div class="card"><div class="card-body">
+          <form method="POST" action="/app/upload-document" enctype="multipart/form-data" class="row g-2 mb-3">
+            <input type="hidden" name="tender_id" value="<%= t._id %>">
+            <div class="col-md-4"><input type="file" name="file" class="form-control form-control-sm" required></div>
+            <div class="col-md-2"><select name="type" class="form-select form-select-sm"><option value="public">Public</option><option value="restricted">Restricted</option></select></div>
+            <div class="col-auto"><button class="btn btn-primary btn-sm">Upload</button></div>
+          </form>
+          <table class="table table-sm"><thead><tr><th>Name</th><th>Type</th><th>Version</th><th>Uploaded</th><th></th></tr></thead><tbody>
+          <% (locals.documents||[]).forEach(doc=>{ %><tr><td><%= doc.original_name %></td><td><%- badge(doc.type) %></td><td>v<%= doc.version %></td><td><%= fmtD(doc.createdAt) %></td>
+          <td><a href="/app/download/tender-doc/<%= doc._id %>" class="btn btn-sm btn-outline-secondary">Download</a>
+          <a href="/app?page=tender_detail&delete=1&table=documents&id=<%= doc._id %>&back=tender_detail&id2=<%= t._id %>" class="btn btn-sm btn-outline-danger">Delete</a></td></tr><% }) %>
+          </tbody></table></div></div></div>
+
+        <div class="tab-pane fade" id="tab-participations"><div class="card"><div class="card-body">
+          <table class="table table-sm"><thead><tr><th>Vendor</th><th>Status</th><th>Payment Ref</th><th>Date</th></tr></thead><tbody>
+          <% (locals.participations||[]).forEach(p=>{ %><tr><td><%= p.vendor_id?p.vendor_id.company_name_en:'—' %></td><td><%- badge(p.status) %></td><td><%= p.payment_ref %></td><td><%= fmtD(p.createdAt) %></td></tr><% }) %>
+          </tbody></table></div></div></div>
+
+        <div class="tab-pane fade" id="tab-bids"><div class="card"><div class="card-body">
+          <table class="table table-sm"><thead><tr><th>Bid ID</th><% if(locals.canSeeVendors){ %><th>Vendor</th><% } %><th>Envelopes</th><th>Amount (OMR)</th><th>Submitted</th></tr></thead><tbody>
+          <% (locals.bids||[]).forEach(bd=>{ %><tr><td><strong><%= bd.bid_identifier %></strong></td>
+          <% if(locals.canSeeVendors){ %><td><%= bd.vendor_id?bd.vendor_id.company_name_en:'(sealed)' %></td><% } %>
+          <td><%= bd.envelope_count %></td><td><%= bd.financial_amount %></td><td><%= fmtDT(bd.submitted_at) %></td></tr><% }) %>
+          </tbody></table></div></div></div>
+
+        <div class="tab-pane fade" id="tab-evaluation"><div class="card"><div class="card-body">
+          <table class="table table-sm"><thead><tr><th>Date</th><th>Venue</th><th>Status</th><th></th></tr></thead><tbody>
+          <% (locals.sessions||[]).forEach(s=>{ %><tr><td><%= fmtD(s.date) %> <%= s.time||'' %></td><td><%= s.venue %></td><td><%- badge(s.status) %></td>
+          <td><a href="/app?page=evaluation_results&id=<%= s._id %>" class="btn btn-sm btn-outline-primary">Results</a></td></tr><% }) %>
+          </tbody></table></div></div></div>
+
+        <div class="tab-pane fade" id="tab-approval"><div class="card"><div class="card-body">
+          <table class="table table-sm"><thead><tr><th>Approver</th><th>Status</th><th>Comments</th><th>Decided</th></tr></thead><tbody>
+          <% (locals.approvals||[]).forEach(a=>{ %><tr><td><%= a.approver_id?a.approver_id.name:'—' %></td><td><%- badge(a.status) %></td><td><%= a.comments||'—' %></td><td><%= fmtDT(a.decided_at) %></td></tr><% }) %>
+          </tbody></table></div></div></div>
+
+        <div class="tab-pane fade" id="tab-timeline"><div class="card"><div class="card-body">
+          <% (locals.timeline||[]).forEach(l=>{ %>
+            <div class="d-flex gap-3 mb-2 small"><span class="text-muted" style="min-width:150px"><%= fmtDT(l.createdAt) %></span>
+            <span class="badge bg-light text-dark"><%= l.action %></span><span><%= l.user_id?l.user_id.name:'system' %></span></div>
+          <% }) %>
+        </div></div></div>
+      </div>
+
+    <!-- ==================== MANAGE VENDORS ==================== -->
+    <% } else if(page==='manage_vendors'){ %>
+      <div class="card"><div class="card-body">
+      <form class="row g-2 mb-3"><input type="hidden" name="page" value="manage_vendors">
+        <div class="col-md-4"><input name="q" value="<%= locals.q||'' %>" class="form-control" placeholder="Search name / CR number"></div>
+        <div class="col-md-2"><select name="status" class="form-select"><option value="">All</option>
+          <% ['pending','approved','blacklisted'].forEach(s=>{ %><option value="<%= s %>" <%= locals.statusFilter===s?'selected':'' %>><%= s %></option><% }) %></select></div>
+        <div class="col-md-3"><select name="category" class="form-select"><option value="">All categories</option>
+          <% (locals.categories||[]).forEach(c=>{ %><option><%= c.name %></option><% }) %></select></div>
+        <div class="col-auto"><button class="btn btn-primary">Filter</button></div>
+      </form>
+      <table class="table table-hover"><thead><tr><th>Company</th><th>CR #</th><th>Contact</th><th>Categories</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+      <% (locals.vendors||[]).forEach(v=>{ %>
+        <tr><td><%= v.company_name_en %></td><td><%= v.cr_number %></td>
+        <td class="small"><%= v.user_id?v.user_id.email:'—' %><br><%= v.user_id?v.user_id.phone:'' %></td>
+        <td class="small"><%= (v.categories||[]).join(', ') %></td><td><%- badge(v.status) %></td>
+        <td><% if(v.status!=='blacklisted'){ %>
+          <button class="btn btn-sm btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#bl<%= v._id %>">Blacklist</button>
+          <div class="collapse mt-1" id="bl<%= v._id %>"><form method="POST" action="/app" class="d-flex gap-1">
+          <input type="hidden" name="action" value="blacklist_vendor"><input type="hidden" name="vendor_id" value="<%= v._id %>">
+          <input name="reason" class="form-control form-control-sm" placeholder="Reason" required><button class="btn btn-sm btn-danger">OK</button></form></div>
+        <% } else { %><span class="small text-danger"><%= v.blacklist_reason %></span><% } %></td></tr>
+      <% }) %>
+      </tbody></table></div></div>
+
+    <!-- ==================== PENDING VENDORS ==================== -->
+    <% } else if(page==='pending_vendors'){ %>
+      <div class="card"><div class="card-body">
+      <table class="table"><thead><tr><th>Company</th><th>CR #</th><th>Contact</th><th>Categories</th><th>Actions</th></tr></thead><tbody>
+      <% (locals.vendors||[]).forEach(v=>{ %>
+        <tr><td><%= v.company_name_en %><br><span class="text-muted small"><%= v.company_name_ar||'' %></span></td>
+        <td><%= v.cr_number %></td><td class="small"><%= v.user_id?v.user_id.name:'' %><br><%= v.user_id?v.user_id.email:'' %></td>
+        <td class="small"><%= (v.categories||[]).join(', ') %></td>
+        <td><form method="POST" action="/app" class="d-inline"><input type="hidden" name="action" value="approve_vendor"><input type="hidden" name="vendor_id" value="<%= v._id %>">
+        <button class="btn btn-sm btn-success">Approve</button></form>
+        <form method="POST" action="/app" class="d-inline"><input type="hidden" name="action" value="reject_vendor"><input type="hidden" name="vendor_id" value="<%= v._id %>">
+        <button class="btn btn-sm btn-danger">Reject</button></form></td></tr>
+      <% }) %>
+      <% if(!(locals.vendors||[]).length){ %><tr><td colspan="5" class="text-center text-muted">No pending vendors</td></tr><% } %>
+      </tbody></table></div></div>
+
+    <!-- ==================== RECORD BID ==================== -->
+    <% } else if(page==='record_bid'){ %>
+      <div class="row g-3">
+        <div class="col-md-6"><div class="card"><div class="card-body">
+          <h6 class="fw-bold"><%= tender.title %> <span class="badge bg-warning text-dark">Bids: <%= bidCount %>/5</span></h6>
+          <p class="text-muted small">Blind entry — vendors shown as anonymous numbers only.</p>
+          <% if(tender.status==='accepting_bids' && bidCount<5){ %>
+          <form method="POST" action="/app"><input type="hidden" name="action" value="record_bid"><input type="hidden" name="tender_id" value="<%= tender._id %>">
+            <div class="mb-2"><label class="form-label">Participant (fee paid)</label><select name="participation_id" class="form-select" required>
+            <% (locals.participations||[]).forEach((p,i)=>{ %><option value="<%= p._id %>">Vendor #<%= i+1 %> — Ref <%= p.payment_ref %></option><% }) %></select></div>
+            <div class="mb-2"><label class="form-label">Envelope Count</label><input type="number" name="envelope_count" class="form-control" value="2" min="1" max="3" required></div>
+            <div class="mb-3"><label class="form-label">Financial Amount (OMR)</label><input type="number" step="0.01" name="financial_amount" class="form-control" required></div>
+            <button class="btn btn-primary">Record Sealed Bid</button>
+          </form>
+          <% } else { %><div class="alert alert-warning py-2">Bid recording closed for this tender.</div><% } %>
+        </div></div></div>
+        <div class="col-md-6"><div class="card"><div class="card-body">
+          <h6 class="fw-bold mb-3">Recorded Bids</h6>
+          <table class="table table-sm"><thead><tr><th>Bid ID</th><th>Envelopes</th><th>Amount</th><th>Time</th></tr></thead><tbody>
+          <% (locals.bids||[]).forEach(bd=>{ %><tr><td><strong><%= bd.bid_identifier %></strong></td><td><%= bd.envelope_count %></td><td><%= bd.financial_amount %></td><td><%= fmtDT(bd.submitted_at) %></td></tr><% }) %>
+          </tbody></table></div></div></div>
+      </div>
+
+    <!-- ==================== CREATE EVALUATION ==================== -->
+    <% } else if(page==='create_evaluation'){ %>
+      <div class="card" style="max-width:680px"><div class="card-body">
+      <h6 class="fw-bold"><%= tender.title %></h6>
+      <p class="small text-muted">Bids to evaluate: <% (locals.bids||[]).forEach(bd=>{ %><span class="badge bg-secondary me-1"><%= bd.bid_identifier %></span><% }) %></p>
+      <form method="POST" action="/app"><input type="hidden" name="action" value="create_evaluation_session"><input type="hidden" name="tender_id" value="<%= tender._id %>">
+      <div class="row g-2">
+        <div class="col-md-4"><label class="form-label">Date</label><input type="date" name="date" class="form-control" required></div>
+        <div class="col-md-4"><label class="form-label">Time</label><input type="time" name="time" class="form-control" required></div>
+        <div class="col-md-4"><label class="form-label">Venue</label><input name="venue" class="form-control" required></div>
+      </div>
+      <label class="form-label mt-3">Committee Members</label>
+      <% (locals.committee||[]).forEach(m=>{ %>
+        <label class="form-check"><input class="form-check-input" type="checkbox" name="member_ids" value="<%= m._id %>"> <%= m.name %> (<%= m.email %>)</label>
+      <% }) %>
+      <button class="btn btn-primary mt-3">Create Session &amp; Notify Members</button>
+      </form></div></div>
+
+    <!-- ==================== EVALUATE ==================== -->
+    <% } else if(page==='evaluate'){ %>
+      <div class="card mb-3"><div class="card-body d-flex justify-content-between">
+        <div><h6 class="fw-bold mb-0"><%= session.tender_id.title %></h6>
+        <span class="small text-muted"><%= fmtD(session.date) %> <%= session.time||'' %> · <%= session.venue %></span> <%- badge(session.status) %></div>
+        <div class="small">Members: <% (locals.members||[]).forEach(m=>{ %>
+          <span class="badge <%= (locals.submittedIds||[]).includes(String(m.user_id._id))?'bg-success':'bg-secondary' %>"><%= m.user_id.name %></span><% }) %>
+        </div>
+      </div></div>
+      <% if(locals.results){ %>
+        <div class="card"><div class="card-body"><h6 class="fw-bold mb-3">Final Ranking</h6>
+        <table class="table"><thead><tr><th>#</th><th>Bid ID</th><th>Avg Technical</th><th>Financial</th><th>Norm. Financial</th><th>Final Score</th></tr></thead><tbody>
+        <% results.forEach((r,i)=>{ %><tr class="<%= i===0?'table-success':'' %>"><td><%= i+1 %></td><td><strong><%= r.bid_identifier %></strong></td><td><%= r.avgTech %></td><td>OMR <%= r.financial_amount %></td><td><%= r.normFin %></td><td class="fw-bold"><%= r.final %></td></tr><% }) %>
+        </tbody></table>
+        <% if(['tender_handler','procurement_head','super_admin'].includes(role) && !session.winning_bid_id){ %>
+          <form method="POST" action="/app" class="row g-2"><input type="hidden" name="action" value="select_winner"><input type="hidden" name="session_id" value="<%= session._id %>">
+          <div class="col-md-3"><select name="winning_bid_id" class="form-select" required><% results.forEach(r=>{ %><option value="<%= r.bid_id %>"><%= r.bid_identifier %></option><% }) %></select></div>
+          <div class="col-md-5"><input name="decision_reason" class="form-control" placeholder="Decision reason" required></div>
+          <div class="col-auto"><button class="btn btn-success">Select Winner → DVC</button></div></form>
+        <% } %>
+        </div></div>
+      <% } else if(locals.myEval){ %>
+        <div class="alert alert-info">You have submitted your evaluation. Results appear once all members submit.</div>
+      <% } else if(role==='committee_member'){ %>
+        <form method="POST" action="/app" id="evalForm"><input type="hidden" name="action" value="submit_evaluation"><input type="hidden" name="session_id" value="<%= session._id %>">
+        <input type="hidden" name="signature_data" id="signature_data">
+        <% (locals.bids||[]).forEach(bd=>{ const k=String(bd._id); %>
+          <div class="card mb-3"><div class="card-body">
+            <h6 class="fw-bold"><%= bd.bid_identifier %> <span class="badge bg-light text-dark">Financial: OMR <%= bd.financial_amount %> (read-only)</span></h6>
+            <div class="row g-2">
+              <% ['understanding','methodology','deliverables','timeline','team','experience'].forEach(cr=>{ %>
+                <div class="col-md-2"><label class="form-label small text-capitalize"><%= cr %></label>
+                <input type="number" name="score_<%= k %>_<%= cr %>" class="form-control form-control-sm" min="1" max="10" required></div>
+              <% }) %>
+            </div>
+            <div class="mt-2">
+              <label class="form-check form-check-inline"><input class="form-check-input" type="radio" name="rec_<%= k %>" value="recommend" required> Recommend</label>
+              <label class="form-check form-check-inline"><input class="form-check-input" type="radio" name="rec_<%= k %>" value="do_not_recommend"> Do Not Recommend</label>
+            </div>
+            <textarea name="comments_<%= k %>" class="form-control mt-2" rows="2" placeholder="Comments"></textarea>
+          </div></div>
+        <% }) %>
+        <div class="card mb-3"><div class="card-body">
+          <label class="form-label fw-bold">Signature</label><br>
+          <canvas id="sigCanvas" class="sig" width="400" height="140"></canvas><br>
+          <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="clearSig()">Clear</button>
+        </div></div>
+        <button class="btn btn-primary btn-lg">Submit Evaluation</button>
+        </form>
+      <% } %>
+
+    <!-- ==================== EVALUATION RESULTS ==================== -->
+    <% } else if(page==='evaluation_results'){ %>
+      <div class="card"><div class="card-body">
+      <h6 class="fw-bold"><%= session.tender_id.title %> — Results <%- badge(session.status) %></h6>
+      <p class="small text-muted">Final = (Avg Technical × 0.4) + (Normalized Financial × 0.6). Norm Fin = (max−price)/(max−min)×10</p>
+      <table class="table"><thead><tr><th>#</th><th>Bid ID</th><th>Avg Tech</th><th>Financial (OMR)</th><th>Norm Fin</th><th>Final</th><th></th></tr></thead><tbody>
+      <% (locals.results||[]).forEach((r,i)=>{ %>
+        <tr class="<%= i===0?'table-success':'' %>"><td><%= i+1 %><%= i===0?' 🏆':'' %></td><td><strong><%= r.bid_identifier %></strong></td>
+        <td><%= r.avgTech %></td><td><%= r.financial_amount %></td><td><%= r.normFin %></td><td class="fw-bold"><%= r.final %></td>
+        <td><button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#det<%= i %>">Member scores</button></td></tr>
+        <tr class="collapse" id="det<%= i %>"><td colspan="7"><table class="table table-sm mb-0"><thead><tr><th>Member</th><th>Tech Total</th><th>Recommendation</th><th>Comments</th></tr></thead><tbody>
+        <% r.evals.forEach(e=>{ %><tr><td><%= e.user_id?e.user_id.name:'—' %></td><td><%= e.technical_total %></td><td><%- badge(e.recommendation==='recommend'?'approved':'rejected') %></td><td class="small"><%= e.comments||'—' %></td></tr><% }) %>
+        </tbody></table></td></tr>
+      <% }) %>
+      </tbody></table></div></div>
+
+    <!-- ==================== APPROVALS (DVC) ==================== -->
+    <% } else if(page==='approvals'){ %>
+      <div class="card"><div class="card-body">
+      <table class="table table-hover"><thead><tr><th>Tender #</th><th>Title</th><th>Status</th><th>Received</th><th></th></tr></thead><tbody>
+      <% (locals.approvals||[]).forEach(a=>{ %>
+        <tr><td><%= a.tender_id?a.tender_id.tender_number:'—' %></td><td><%= a.tender_id?a.tender_id.title:'—' %></td>
+        <td><%- badge(a.status) %></td><td><%= fmtD(a.createdAt) %></td>
+        <td><% if(a.status==='pending'){ %><a href="/app?page=approval_detail&id=<%= a._id %>" class="btn btn-sm btn-primary">Review</a><% } %></td></tr>
+      <% }) %>
+      </tbody></table></div></div>
+
+    <!-- ==================== APPROVAL DETAIL (DVC) ==================== -->
+    <% } else if(page==='approval_detail'){ const t=approval.tender_id; %>
+      <div class="card mb-3"><div class="card-body">
+        <h5 class="fw-bold"><%= t.title %></h5><span class="text-muted"><%= t.tender_number %> · <%= t.category %></span> <%- badge(t.status) %>
+        <% if(locals.session && session.decision_reason){ %><div class="alert alert-light mt-3 py-2"><strong>Committee decision:</strong> <%= session.decision_reason %></div><% } %>
+      </div></div>
+      <div class="card mb-3"><div class="card-body"><h6 class="fw-bold mb-3">Ranked Bids</h6>
+      <table class="table"><thead><tr><th>#</th><th>Bid ID</th><th>Avg Tech</th><th>Financial</th><th>Final</th></tr></thead><tbody>
+      <% (locals.results||[]).forEach((r,i)=>{ %><tr class="<%= i===0?'table-success':'' %>"><td><%= i+1 %></td><td><%= r.bid_identifier %></td><td><%= r.avgTech %></td><td>OMR <%= r.financial_amount %></td><td class="fw-bold"><%= r.final %></td></tr><% }) %>
+      </tbody></table>
+      <h6 class="fw-bold mt-3">Member Signatures</h6>
+      <div class="d-flex gap-3 flex-wrap">
+        <% const sigs={}; (locals.results||[]).forEach(r=>r.evals.forEach(e=>{ if(e.signature_path) sigs[e.user_id?e.user_id.name:'?']=e.signature_path; })); %>
+        <% Object.entries(sigs).forEach(([n,p])=>{ %><div class="text-center"><img src="/<%= p %>" style="height:60px;border:1px solid #E2E8F0;border-radius:8px"><div class="small text-muted"><%= n %></div></div><% }) %>
+      </div>
+      </div></div>
+      <% if(approval.status==='pending'){ %>
+      <div class="card"><div class="card-body">
+        <div class="d-flex gap-2 flex-wrap">
+          <form method="POST" action="/app"><input type="hidden" name="action" value="dvc_approve"><input type="hidden" name="approval_id" value="<%= approval._id %>">
+          <button class="btn btn-success"><i class="fa-solid fa-check me-1"></i>Approve &amp; Award</button></form>
+          <button class="btn btn-info text-white" data-bs-toggle="collapse" data-bs-target="#infoF"><i class="fa-solid fa-circle-question me-1"></i>Request Info</button>
+          <button class="btn btn-danger" data-bs-toggle="collapse" data-bs-target="#rejF"><i class="fa-solid fa-xmark me-1"></i>Reject</button>
+        </div>
+        <div class="collapse mt-3" id="infoF"><form method="POST" action="/app" class="d-flex gap-2">
+          <input type="hidden" name="action" value="dvc_request_info"><input type="hidden" name="approval_id" value="<%= approval._id %>">
+          <input name="comments" class="form-control" placeholder="What information do you need?" required><button class="btn btn-info text-white">Send</button></form></div>
+        <div class="collapse mt-3" id="rejF"><form method="POST" action="/app" class="d-flex gap-2">
+          <input type="hidden" name="action" value="dvc_reject"><input type="hidden" name="approval_id" value="<%= approval._id %>">
+          <input name="comments" class="form-control" placeholder="Rejection reason (mandatory)" required><button class="btn btn-danger">Reject</button></form></div>
+      </div></div>
+      <% } %>
+
+    <!-- ==================== PENDING FEES ==================== -->
+    <% } else if(page==='pending_fees'){ %>
+      <div class="card"><div class="card-body">
+      <table class="table"><thead><tr><th>Vendor</th><th>Tender</th><th>Fee (OMR)</th><th>Payment Ref</th><th>Confirm</th></tr></thead><tbody>
+      <% (locals.participations||[]).forEach(p=>{ %>
+        <tr><td><%= p.vendor_id?p.vendor_id.company_name_en:'—' %></td><td><%= p.tender_id?p.tender_id.title:'—' %></td>
+        <td><%= p.tender_id?p.tender_id.fee_amount:'—' %></td><td><%= p.payment_ref %></td>
+        <td><button class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#cf<%= p._id %>">Confirm</button>
+        <div class="collapse mt-1" id="cf<%= p._id %>"><form method="POST" action="/app" class="d-flex gap-1">
+        <input type="hidden" name="action" value="confirm_fee"><input type="hidden" name="participation_id" value="<%= p._id %>">
+        <select name="payment_method" class="form-select form-select-sm" style="width:130px"><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option></select>
+        <input name="reference_number" class="form-control form-control-sm" placeholder="Reference #" required>
+        <button class="btn btn-sm btn-success">OK</button></form></div></td></tr>
+      <% }) %>
+      <% if(!(locals.participations||[]).length){ %><tr><td colspan="5" class="text-center text-muted">No pending fees</td></tr><% } %>
+      </tbody></table></div></div>
+
+    <!-- ==================== FEE HISTORY ==================== -->
+    <% } else if(page==='fee_history'){ %>
+      <div class="card"><div class="card-body">
+      <form class="row g-2 mb-3"><input type="hidden" name="page" value="fee_history">
+        <div class="col-md-3"><select name="status" class="form-select"><option value="">All</option>
+        <% ['confirmed','refunded','pending'].forEach(s=>{ %><option value="<%= s %>" <%= locals.statusFilter===s?'selected':'' %>><%= s %></option><% }) %></select></div>
+        <div class="col-auto"><button class="btn btn-primary">Filter</button></div></form>
+      <table class="table"><thead><tr><th>Vendor</th><th>Tender</th><th>Amount</th><th>Method</th><th>Ref</th><th>Status</th><th>Confirmed By</th><th></th></tr></thead><tbody>
+      <% (locals.payments||[]).forEach(fp=>{ %>
+        <tr><td><%= fp.vendor_id?fp.vendor_id.company_name_en:'—' %></td><td class="small"><%= fp.tender_id?fp.tender_id.title:'—' %></td>
+        <td>OMR <%= fp.amount %></td><td><%= fp.payment_method %></td><td><%= fp.reference_number %></td><td><%- badge(fp.status) %></td>
+        <td class="small"><%= fp.confirmed_by?fp.confirmed_by.name:'—' %></td>
+        <td><% if(fp.status==='confirmed'){ %><form method="POST" action="/app"><input type="hidden" name="action" value="refund_fee"><input type="hidden" name="payment_id" value="<%= fp._id %>">
+        <button class="btn btn-sm btn-outline-danger">Refund</button></form><% } %></td></tr>
+      <% }) %>
+      </tbody></table></div></div>
+
+    <!-- ==================== NOTIFICATIONS ==================== -->
+    <% } else if(page==='notifications'){ %>
+      <div class="card"><div class="card-body">
+      <% (locals.notes||[]).forEach(n=>{ %>
+        <div class="d-flex justify-content-between align-items-start border-bottom py-2 <%= n.is_read?'':'bg-light' %>" style="border-radius:8px;padding:0 .5rem">
+          <div><strong><%= n.subject %></strong> <% if(!n.is_read){ %><span class="badge bg-danger">new</span><% } %>
+          <div class="small text-muted"><%= n.body %></div><div class="small text-muted"><%= fmtDT(n.sent_at) %></div></div>
+          <% if(!n.is_read){ %><a href="/app/notifications/read/<%= n._id %>" class="btn btn-sm btn-outline-primary">Mark read</a><% } %>
+        </div>
+      <% }) %>
+      <% if(!(locals.notes||[]).length){ %><p class="text-muted text-center mb-0">No notifications</p><% } %>
+      </div></div>
+
+    <!-- ==================== AUDIT LOGS ==================== -->
+    <% } else if(page==='audit_logs'){ %>
+      <div class="card"><div class="card-body">
+      <form class="row g-2 mb-3"><input type="hidden" name="page" value="audit_logs">
+        <div class="col-md-2"><input type="date" name="from" value="<%= filters.from %>" class="form-control"></div>
+        <div class="col-md-2"><input type="date" name="to" value="<%= filters.to %>" class="form-control"></div>
+        <div class="col-md-2"><input name="entity" value="<%= filters.entity %>" class="form-control" placeholder="Entity (e.g. Tender)"></div>
+        <div class="col-md-2"><input name="action" value="<%= filters.action %>" class="form-control" placeholder="Action"></div>
+        <div class="col-auto"><button class="btn btn-primary">Filter</button></div></form>
+      <table class="table table-sm"><thead><tr><th>Time</th><th>User</th><th>Role</th><th>Entity</th><th>Action</th><th>IP</th></tr></thead><tbody>
+      <% (locals.logs||[]).forEach(l=>{ %><tr><td class="small"><%= fmtDT(l.createdAt) %></td><td><%= l.user_id?l.user_id.name:'system' %></td>
+      <td class="small"><%= l.user_role %></td><td><%= l.entity_type %></td><td><span class="badge bg-light text-dark"><%= l.action %></span></td><td class="small"><%= l.ip_address %></td></tr><% }) %>
+      </tbody></table></div></div>
+
+    <!-- ==================== MANAGE USERS ==================== -->
+    <% } else if(page==='manage_users'){ %>
+      <div class="card mb-3"><div class="card-body">
+      <h6 class="fw-bold mb-3">Add User</h6>
+      <form method="POST" action="/app" class="row g-2"><input type="hidden" name="action" value="add_user">
+        <div class="col-md-2"><input name="name" class="form-control" placeholder="Name" required></div>
+        <div class="col-md-3"><input type="email" name="email" class="form-control" placeholder="Email" required></div>
+        <div class="col-md-2"><input name="password" class="form-control" placeholder="Password" required></div>
+        <div class="col-md-2"><input name="phone" class="form-control" placeholder="Phone"></div>
+        <div class="col-md-2"><select name="role" class="form-select">
+        <% ['tender_handler','procurement_head','dvc','committee_member','finance_officer','webmaster','super_admin'].forEach(r=>{ %><option value="<%= r %>"><%= r.replace(/_/g,' ') %></option><% }) %></select></div>
+        <div class="col-auto"><button class="btn btn-primary">Add</button></div></form>
+      </div></div>
+      <div class="card"><div class="card-body">
+      <table class="table table-hover"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th><th></th></tr></thead><tbody>
+      <% (locals.users||[]).forEach(u=>{ %><tr><td><%= u.name %></td><td><%= u.email %></td><td><span class="badge bg-purple"><%= u.role.replace(/_/g,' ') %></span></td>
+      <td><%- badge(u.is_active?'approved':'rejected') %></td>
+      <td><% if(u.is_active && String(u._id)!==String(user._id)){ %><a href="/app?page=manage_users&delete=1&table=users&id=<%= u._id %>&back=manage_users" class="btn btn-sm btn-outline-danger">Deactivate</a><% } %></td></tr><% }) %>
+      </tbody></table></div></div>
+
+    <!-- ==================== SETTINGS ==================== -->
+    <% } else if(page==='settings'){ %>
+      <div class="card" style="max-width:600px"><div class="card-body">
+      <% (locals.settings||[]).forEach(s=>{ %>
+        <form method="POST" action="/app" class="d-flex gap-2 mb-2"><input type="hidden" name="action" value="update_setting">
+        <input type="hidden" name="key" value="<%= s.key %>">
+        <label class="form-label mb-0 align-self-center" style="min-width:160px"><strong><%= s.key %></strong></label>
+        <input name="value" value="<%= s.value %>" class="form-control form-control-sm">
+        <button class="btn btn-sm btn-primary">Save</button></form>
+      <% }) %>
+      <hr><h6 class="fw-bold">Add Setting</h6>
+      <form method="POST" action="/app" class="d-flex gap-2"><input type="hidden" name="action" value="update_setting">
+      <input name="key" class="form-control form-control-sm" placeholder="key" required>
+      <input name="value" class="form-control form-control-sm" placeholder="value" required>
+      <button class="btn btn-sm btn-success">Add</button></form>
+      </div></div>
+
+    <!-- ==================== BROADCAST ==================== -->
+    <% } else if(page==='broadcast_notification'){ %>
+      <div class="card" style="max-width:600px"><div class="card-body">
+      <form method="POST" action="/app"><input type="hidden" name="action" value="send_broadcast">
+        <div class="mb-2"><label class="form-label">Audience</label><select name="audience" class="form-select">
+        <option value="all">All Users</option>
+        <% ['vendor','tender_handler','committee_member','finance_officer','procurement_head','dvc','webmaster'].forEach(r=>{ %><option value="<%= r %>"><%= r.replace(/_/g,' ') %></option><% }) %></select></div>
+        <div class="mb-2"><label class="form-label">Subject</label><input name="subject" class="form-control" required></div>
+        <div class="mb-3"><label class="form-label">Message</label><textarea name="message" class="form-control" rows="4" required></textarea></div>
+        <button class="btn btn-primary"><i class="fa-solid fa-bullhorn me-1"></i>Send Broadcast</button>
+      </form></div></div>
+
+    <!-- ==================== REPORTS ==================== -->
+    <% } else if(page==='reports'){ %>
+      <form class="row g-2 mb-3"><input type="hidden" name="page" value="reports">
+        <div class="col-auto"><input type="date" name="from" value="<%= filters.from %>" class="form-control"></div>
+        <div class="col-auto"><input type="date" name="to" value="<%= filters.to %>" class="form-control"></div>
+        <div class="col-auto"><button class="btn btn-primary">Apply</button></div></form>
+      <div class="row g-3 mb-4">
+        <% (locals.cards||[]).forEach(c=>{ %><div class="col-md-3"><div class="card metric-card">
+          <div class="d-flex justify-content-between align-items-center"><div><div class="text-muted small"><%= c.label %></div><h3 class="fw-bold mb-0"><%= c.value %></h3></div>
+          <div class="fs-3 text-<%= c.color %>"><i class="fa-solid <%= c.icon %>"></i></div></div></div></div><% }) %>
+      </div>
+      <div class="row g-3 mb-4">
+        <div class="col-md-7"><div class="card"><div class="card-body"><h6 class="fw-bold">Tenders by Category</h6><div class="chart-wrap"><canvas id="catChart"></canvas></div></div></div></div>
+        <div class="col-md-5"><div class="card"><div class="card-body"><h6 class="fw-bold">Tenders by Status</h6><div class="chart-wrap"><canvas id="statusChart"></canvas></div></div></div></div>
+      </div>
+      <div class="card"><div class="card-body"><h6 class="fw-bold mb-3">Tender Summary</h6>
+      <table class="table table-sm"><thead><tr><th>Tender #</th><th>Title</th><th>Category</th><th>Fee</th><th>Status</th><th>Created</th></tr></thead><tbody>
+      <% (locals.summary||[]).forEach(t=>{ %><tr><td><%= t.tender_number %></td><td><%= t.title %></td><td><%= t.category %></td><td><%= t.fee_amount %></td><td><%- badge(t.status) %></td><td><%= fmtD(t.createdAt) %></td></tr><% }) %>
+      </tbody></table></div></div>
+      <script>
+        new Chart(document.getElementById('catChart'),{type:'bar',data:{labels:<%- JSON.stringify(Object.keys(catCounts)) %>,datasets:[{label:'Tenders',data:<%- JSON.stringify(Object.values(catCounts)) %>,backgroundColor:'#1E40AF'}]},options:{maintainAspectRatio:false}});
+        new Chart(document.getElementById('statusChart'),{type:'doughnut',data:{labels:<%- JSON.stringify(Object.keys(statusCounts)) %>,datasets:[{data:<%- JSON.stringify(Object.values(statusCounts)) %>,backgroundColor:['#6B7280','#1E40AF','#06B6D4','#F59E0B','#F97316','#7C3AED','#10B981','#EF4444','#0EA5E9','#84CC16']}]},options:{maintainAspectRatio:false}});
+      </script>
+
+    <!-- ==================== MY PROFILE ==================== -->
+    <% } else if(page==='my_profile'){ %>
+      <div class="card" style="max-width:720px"><div class="card-body">
+      <% if(locals.vendor){ %>
+      <form method="POST" action="/app"><input type="hidden" name="action" value="update_profile">
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label">Contact Name</label><input name="name" value="<%= user.name %>" class="form-control"></div>
+        <div class="col-md-6"><label class="form-label">Phone</label><input name="phone" value="<%= user.phone||'' %>" class="form-control"></div>
+        <div class="col-md-6"><label class="form-label">Company (EN)</label><input name="company_name_en" value="<%= vendor.company_name_en %>" class="form-control"></div>
+        <div class="col-md-6"><label class="form-label">Company (AR)</label><input name="company_name_ar" value="<%= vendor.company_name_ar||'' %>" class="form-control"></div>
+        <div class="col-md-6"><label class="form-label">CR Number</label><input value="<%= vendor.cr_number %>" class="form-control" disabled></div>
+        <div class="col-md-6"><label class="form-label">VAT Number</label><input name="vat_number" value="<%= vendor.vat_number||'' %>" class="form-control"></div>
+        <div class="col-12"><label class="form-label">Address</label><input name="address" value="<%= vendor.address||'' %>" class="form-control"></div>
+        <div class="col-12"><label class="form-label">Categories</label><div class="row">
+        <% (locals.categories||[]).forEach(c=>{ %><div class="col-md-4"><label class="form-check"><input class="form-check-input" type="checkbox" name="categories" value="<%= c.name %>" <%= (vendor.categories||[]).includes(c.name)?'checked':'' %>> <%= c.name %></label></div><% }) %>
+        </div></div>
+      </div>
+      <button class="btn btn-primary mt-3">Save Profile</button></form>
+      <% } else { %><p class="text-muted">Vendor profile not found.</p><% } %>
+      </div></div>
+
+    <!-- ==================== VIEW BID DOCS ==================== -->
+    <% } else if(page==='view_bid_docs'){ %>
+      <div class="card mb-3"><div class="card-body">
+      <h6 class="fw-bold"><%= tender.title %> — Bid Documents</h6>
+      <form method="POST" action="/app/upload-bid-document" enctype="multipart/form-data" class="row g-2 mt-2">
+        <input type="hidden" name="tender_id" value="<%= tender._id %>">
+        <div class="col-md-3"><select name="bid_id" class="form-select form-select-sm" required>
+        <% (locals.bids||[]).forEach(bd=>{ %><option value="<%= bd._id %>"><%= bd.bid_identifier %></option><% }) %></select></div>
+        <div class="col-md-2"><select name="doc_type" class="form-select form-select-sm"><option value="technical">Technical</option><option value="financial">Financial</option></select></div>
+        <div class="col-md-4"><input type="file" name="file" class="form-control form-control-sm" required></div>
+        <div class="col-auto"><button class="btn btn-primary btn-sm">Upload</button></div>
+      </form></div></div>
+      <div class="card"><div class="card-body">
+      <table class="table table-sm"><thead><tr><th>Bid ID</th><th>Type</th><th>File</th><th>Uploaded</th><th></th></tr></thead><tbody>
+      <% (locals.bidDocs||[]).forEach(doc=>{ %><tr><td><%= doc.bid_id?doc.bid_id.bid_identifier:'—' %></td><td><%= doc.type %></td>
+      <td><%= doc.filename %></td><td><%= fmtD(doc.createdAt) %></td>
+      <td><a href="/app/download/bid-doc/<%= doc._id %>" class="btn btn-sm btn-outline-secondary">Download</a></td></tr><% }) %>
+      </tbody></table></div></div>
+
+    <% } else { %>
+      <div class="alert alert-warning">Page not found.</div>
+    <% } %>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// Signature pad (evaluate page)
+const cv=document.getElementById('sigCanvas');
+if(cv){
+  const ctx=cv.getContext('2d');ctx.strokeStyle='#1E293B';ctx.lineWidth=2;let drawing=false;
+  function pos(e){const r=cv.getBoundingClientRect();const p=e.touches?e.touches[0]:e;return{x:p.clientX-r.left,y:p.clientY-r.top};}
+  function start(e){drawing=true;const p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);e.preventDefault();}
+  function move(e){if(!drawing)return;const p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke();e.preventDefault();}
+  function end(){drawing=false;}
+  cv.addEventListener('mousedown',start);cv.addEventListener('mousemove',move);window.addEventListener('mouseup',end);
+  cv.addEventListener('touchstart',start);cv.addEventListener('touchmove',move);cv.addEventListener('touchend',end);
+  window.clearSig=()=>ctx.clearRect(0,0,cv.width,cv.height);
+  const f=document.getElementById('evalForm');
+  if(f)f.addEventListener('submit',()=>{document.getElementById('signature_data').value=cv.toDataURL('image/png');});
+}
+</script>
+</body>
+</html>
